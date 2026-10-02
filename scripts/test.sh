@@ -2,10 +2,12 @@
 set -e
 echo "Running tests and exporting the JUnit report"
 
+: "${DOCTR_VERSION:?DOCTR_VERSION is not set (resolved by scripts/resolve_version.sh)}"
+
 # Runs the suite inside the image build and extracts only the JUnit XML into the workspace, where
 # the Jenkinsfile's junit step picks it up. Doing it through the build rather than a separate
-# `go test` means the agent needs no Go toolchain — only Docker — and the tests run exactly once:
-# the image build that follows reuses this cached stage.
+# pytest run means the agent needs no Python toolchain — only Docker — and the tests run exactly
+# once: the image build that follows reuses this cached stage (same build args, same cache key).
 #
 # The test-results target never fails, so a failing test still produces a report — see
 # scripts/image-tests.sh, which runs inside that stage. The push build is what refuses to proceed,
@@ -19,6 +21,7 @@ mkdir -p "${RESULTS_DIR}"
 
 docker buildx build \
     --target test-results \
+    --build-arg "DOCTR_VERSION=${DOCTR_VERSION}" \
     --output "type=local,dest=${RESULTS_DIR}" \
     --pull \
     .

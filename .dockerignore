@@ -1,0 +1,9 @@
+.git
+.github
+docs
+*.md
+Jenkinsfile
+test-results
+build-metadata-*.json
+digest-*.txt
+docker-compose.yml

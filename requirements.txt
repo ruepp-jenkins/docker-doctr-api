@@ -1,0 +1,6 @@
+# Runtime dependencies of the upstream API template (doctr/api/pyproject.toml), installed next to the
+# docTR release the image is built from. Upstream pins python-doctr to its main branch instead, which
+# is exactly what this image avoids.
+fastapi>=0.73.0
+uvicorn>=0.11.1
+python-multipart>=0.0.5

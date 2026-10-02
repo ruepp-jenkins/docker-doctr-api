@@ -1,0 +1,19 @@
+services:
+  doctr-api:
+    image: ruepp/doctr-api:latest
+    container_name: doctr-api
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      WORKERS: "1"
+      LOG_LEVEL: info
+      # CORS_ALLOW_ORIGINS: "https://app.example.com"
+      # ROOT_PATH: "/doctr"
+    volumes:
+      # Keeps models downloaded at runtime (non-default architectures, layout/table models).
+      # A named volume is pre-filled with the models baked into the image on first start.
+      - doctr-cache:/opt/doctr/cache
+
+volumes:
+  doctr-cache:

@@ -1,0 +1,5 @@
+# Only installed in the Dockerfile's `test` stage, never in the published image.
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+httpx>=0.23.0
+requests>=2.20.0

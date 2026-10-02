@@ -1,12 +1,11 @@
 properties(
     [
         githubProjectProperty(
-            displayName: 'sunshine-gw',
-            projectUrlStr: 'https://github.com/ruepp-jenkins/sunshine-gw'
+            displayName: 'docker-doctr-api',
+            projectUrlStr: 'https://github.com/ruepp-jenkins/docker-doctr-api'
         ),
-        // Every agent's tags derive from the same datestamp. Concurrent builds of the same branch
-        // would write the same intermediate tags, and the manifest could pick up half of one build
-        // and half of another.
+        // Concurrent builds of the same branch would write the same tags, and the manifest could
+        // pick up half of one build and half of another.
         disableConcurrentBuilds(abortPrevious: true)
     ]
 )
@@ -81,8 +80,16 @@ pipeline {
     // different machines, so every stage names its own.
     agent none
 
+    parameters {
+        // Empty means: the latest docTR release on GitHub, which is what every triggered build
+        // does. Set it to rebuild an older release by hand; `latest` then stays where it is.
+        string(name: 'DOCTR_VERSION_OVERRIDE',
+               defaultValue: '',
+               description: 'docTR release tag to build (e.g. v1.0.1). Empty = latest GitHub release.')
+    }
+
     environment {
-        IMAGE_FULLNAME = 'ruepp/sunshine-gw'
+        IMAGE_FULLNAME = 'ruepp/doctr-api'
 
         // Every agent builds its own architecture and nothing else. 'host' is what tells
         // scripts/docker_platforms.sh to skip the QEMU registration: with a machine per platform
@@ -95,35 +102,36 @@ pipeline {
     }
 
     triggers {
-        // Rebuild when a base image moves, so a fixed alpine or Go release reaches users
-        // without anyone pushing a commit.
+        // Two reasons to build, both watched here:
         //
-        // Docker Hub's registry API needs a bearer token even for public images, so this
-        // watches the Hub's own repository API instead, which answers anonymously. The
-        // field to watch is '$.digest': it changes exactly when the tag is republished.
-        // Do not watch 'tag_last_pulled' or 'tag_last_pushed' - the first changes on every
-        // pull by anyone and would trigger a build every half hour.
+        // 1. A new docTR release. GitHub's /releases/latest answers with the newest non-draft,
+        //    non-prerelease release; '$.tag_name' changes exactly when one is published. The build
+        //    then resolves the same endpoint (scripts/resolve_version.sh) and publishes the image
+        //    under that very tag, plus `latest`.
+        //    Unauthenticated, this API allows 60 requests per hour and IP — one every 30 minutes is
+        //    far below that.
         //
-        // The tags mirror the ARG defaults in the Dockerfile: the MAJOR tags, so every Go
-        // 1.x and every Alpine 3.x arrives by itself. That only works because the pipeline
-        // gates on it - the Go suite catches a breaking toolchain, the Dockerfile's `smoke`
-        // stage catches a renamed Alpine package. Change a tag there and here together.
+        // 2. A new Python base image. Docker Hub's repository API answers anonymously, and '$.digest'
+        //    changes exactly when the tag is republished. Do not watch 'tag_last_pulled' or
+        //    'tag_last_pushed' — the first changes on every pull by anyone. The build then republishes
+        //    the current release with the patched base under its existing tag.
+        //    The tag mirrors the PYTHON_VERSION default in the Dockerfile. Change both together.
         URLTrigger(
             cronTabSpec: 'H/30 * * * *',
             labelRestriction: 'urltrigger',
             entries: [
                 URLTriggerEntry(
-                    url: 'https://hub.docker.com/v2/repositories/library/golang/tags/1',
+                    url: 'https://api.github.com/repos/mindee/doctr/releases/latest',
                     contentTypes: [
                         JsonContent(
                             [
-                                JsonContentEntry(jsonPath: '$.digest')
+                                JsonContentEntry(jsonPath: '$.tag_name')
                             ]
                         )
                     ]
                 ),
                 URLTriggerEntry(
-                    url: 'https://hub.docker.com/v2/repositories/library/alpine/tags/3',
+                    url: 'https://hub.docker.com/v2/repositories/library/python/tags/3.12-slim',
                     contentTypes: [
                         JsonContent(
                             [
@@ -138,17 +146,21 @@ pipeline {
 
     stages {
         stage('Prepare') {
-            // The datestamp goes into every tag, including the one the manifest step below looks
-            // up. Computed once here rather than by each agent: two machines running `date` disagree
-            // across midnight and across time zones, and the manifest would then reference a tag
-            // that was never written.
+            // The docTR version goes into the build and into every tag, including the one the
+            // manifest step below looks up. Resolved once here rather than by each agent: a release
+            // published while the build runs would otherwise give the two architectures different
+            // versions, joined under one tag.
             agent { label 'docker' }
             steps {
                 checkoutRepo()
                 script {
-                    env.DATESTAMP = sh(script: 'date +%Y%m%d', returnStdout: true).trim()
+                    def resolved = sh(script: './scripts/resolve_version.sh', returnStdout: true).trim().split(/\s+/)
+                    env.DOCTR_VERSION = resolved[0]
+                    env.DOCTR_IS_LATEST = resolved[1]
+                    currentBuild.description = "docTR ${env.DOCTR_VERSION}" +
+                        (env.DOCTR_IS_LATEST == 'true' ? ' (latest)' : '')
                 }
-                echo "Tag base for this build: ${env.DATESTAMP}"
+                echo "docTR release for this build: ${env.DOCTR_VERSION} (latest: ${env.DOCTR_IS_LATEST})"
             }
             post {
                 always {

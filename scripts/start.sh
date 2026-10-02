@@ -9,6 +9,8 @@ cd "${ROOT}"
 
 echo "Starting build workflow"
 
+: "${DOCTR_VERSION:?DOCTR_VERSION is not set (resolved by scripts/resolve_version.sh)}"
+
 # shellcheck source=scripts/docker_platforms.sh
 . "${ROOT}/scripts/docker_platforms.sh"
 # shellcheck source=scripts/docker_tags.sh
@@ -35,11 +37,11 @@ ARCH="${HOST_PLATFORM#linux/}"
 METADATA_FILE="build-metadata-${ARCH}.json"
 DIGEST_FILE="digest-${ARCH}.txt"
 
-echo "[${BRANCH_NAME:-local}] Building ${IMAGE_REPO} for ${BASE_TAG} natively on ${HOST_PLATFORM}"
+echo "[${BRANCH_NAME:-local}] Building ${IMAGE_REPO} for ${BASE_TAG} (docTR ${DOCTR_VERSION}) natively on ${HOST_PLATFORM}"
 
-# VCS_REF lands in the binary (-X main.version) and in the image labels, so a running
-# gateway and `docker inspect` both say which commit they came from. GIT_COMMIT is set by
-# Jenkins; a run by hand falls back to git, and to "unknown" outside a checkout.
+# VCS_REF lands in the image labels, so `docker inspect` says which commit of this repository built
+# the image. GIT_COMMIT is set by Jenkins; a run by hand falls back to git, and to "unknown" outside
+# a checkout. The docTR release itself is DOCTR_VERSION, resolved once by the Prepare stage.
 VCS_REF="${GIT_COMMIT:-$(git rev-parse --short HEAD 2>/dev/null || echo unknown)}"
 BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
@@ -47,6 +49,7 @@ docker buildx build \
     --platform "${RESOLVED_PLATFORMS}" \
     --output "type=image,name=${IMAGE_REPO},push-by-digest=true,name-canonical=true,push=true" \
     --metadata-file "${METADATA_FILE}" \
+    --build-arg "DOCTR_VERSION=${DOCTR_VERSION}" \
     --build-arg "VCS_REF=${VCS_REF}" \
     --build-arg "BUILD_DATE=${BUILD_DATE}" \
     --pull \
