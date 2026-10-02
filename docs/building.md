@@ -50,7 +50,7 @@ base ──► source ──► build ──► models ──► test ──► 
 | `base` | `python:3.12-slim` + system libraries for OpenCV + `curl` for the health check |
 | `source` | Shallow clone of `mindee/doctr` at `DOCTR_VERSION` |
 | `build` | Virtualenv: CPU torch, docTR from source, FastAPI/uvicorn, upstream `api/app`, this repo's `server/` |
-| `models` | Downloads the default model weights into `DOCTR_CACHE_DIR` |
+| `models` | Downloads the default model weights into `DOCTR_CACHE_DIR`, the multilingual Hub model into `HF_HOME` |
 | `test` | Runs the tests (see below). Never fails; writes the verdict to `/out/exit-code` |
 | `test-results` | Only the JUnit reports, for `--output type=local` |
 | `verified` | Fails when the verdict is not `0` |
@@ -64,7 +64,7 @@ the image:
 | Suite | Source | Checks |
 | --- | --- | --- |
 | `upstream` | `api/tests` of the docTR release | All four routes with real models, expected results from upstream |
-| `image` | [`tests/`](../tests) | `/health`, `/` redirect, OpenAPI routes, version stamp, baked-in models, OCR round trip on a generated image, rejected file types |
+| `image` | [`tests/`](../tests) | `/health`, `/` redirect, OpenAPI routes, version stamp, baked-in models, OCR round trip on a generated image, rejected file types, `/ocr/text` (JSON, plain, German with the multilingual model, Hub allowlist) |
 | `smoke` | `scripts/image-tests.sh` | Starts the real entrypoint and waits for `/health` over HTTP |
 
 Run them and collect the JUnit reports without building the final image:
@@ -84,6 +84,8 @@ The upstream tests download two sample images from GitHub, so the build needs in
 | `Dockerfile` | The image |
 | `docker-entrypoint.sh` | Turns the environment variables into the uvicorn command line |
 | `server/main.py` | Wraps upstream's `app.main:app`: `/health`, CORS, `/` redirect |
+| `server/text.py` | `POST /ocr/text` |
+| `server/predictor.py` | Predictor for `/ocr/text`, Hub models as `reco_arch` (allowlisted) |
 | `requirements.txt` | API runtime dependencies (from upstream `api/pyproject.toml`) |
 | `requirements-test.txt` | Test dependencies, `test` stage only |
 | `scripts/preload_models.py` | Downloads the default models at build time |

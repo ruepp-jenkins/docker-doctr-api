@@ -57,6 +57,7 @@ prefix** before forwarding, set `ROOT_PATH` so the Swagger UI and the OpenAPI sc
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `POST` | `/ocr/` | Full OCR: detection + recognition, optional orientation, language, layout and tables |
+| `POST` | `/ocr/text` | Same OCR, **only the text** (JSON or `text/plain`) — added by this image |
 | `POST` | `/detection/` | Text detection only (boxes or polygons) |
 | `POST` | `/recognition/` | Text recognition of pre-cropped word images |
 | `POST` | `/kie/` | Key information extraction (detected text grouped by class) |
@@ -65,8 +66,9 @@ prefix** before forwarding, set `ROOT_PATH` so the Swagger UI and the OpenAPI sc
 | `GET` | `/openapi.json` | OpenAPI schema |
 
 The four processing routes come unchanged from upstream's
-[API template](https://github.com/mindee/doctr/tree/main/api). Paths end with a slash; without it the
-server answers with a `307` redirect, which `curl` only follows with `-L`.
+[API template](https://github.com/mindee/doctr/tree/main/api). Their paths end with a slash; without it
+the server answers with a `307` redirect, which `curl` only follows with `-L`. `/ocr/text` has no
+trailing slash.
 
 ### Input
 
@@ -88,10 +90,93 @@ Commonly used parameters of `/ocr/`:
 | `detect_language` | `false` | Detect the page language |
 | `detect_layout` / `detect_tables` | `false` | Layout regions / table structure (downloads extra models on first use) |
 | `resolve_lines` / `resolve_blocks` | `true` / `false` | Group words into lines / blocks |
-| `bin_thresh` / `box_thresh` | `0.1` / `0.1` | Detection thresholds |
+| `bin_thresh` / `box_thresh` | `0.1` / `0.1` | Detection thresholds. The API's `0.1` finds faint text but can also turn specks into stray characters; docTR's own default is `0.3`. |
 
-Only the default `det_arch`/`reco_arch` are baked into the image. Any other model is downloaded on its
+Only the default `det_arch`/`reco_arch` and the multilingual Hub model (see
+[German and other languages](#german-and-other-languages-umlauts-ß)) are baked into the image. Any other model is downloaded on its
 first use — keep the cache volume so this happens only once.
+
+## Text only: `/ocr/text`
+
+`/ocr/` returns the full document tree — blocks, lines, words, geometries, scores. When you only need
+the text (n8n, Zapier, scripts), use `POST /ocr/text`. It takes the same files and the same query
+parameters, runs the same OCR, and lets docTR render the text in reading order.
+
+```bash
+curl -X POST "http://localhost:8080/ocr/text" -F "files=@scan.png;type=image/png"
+```
+
+```json
+{
+  "text": "Rechnung Nr. 4711\nMüller GmbH",
+  "pages": [
+    {"name": "scan.png", "page": 1, "text": "Rechnung Nr. 4711\nMüller GmbH"}
+  ]
+}
+```
+
+- `text`: all pages of all files, separated by a blank line
+- `pages`: one entry per page; `page` counts within each file (a 3-page PDF gives pages 1–3)
+- Lines are separated by `\n`, blocks by a blank line.
+
+With `?format=plain` the answer is the bare text as `text/plain`:
+
+```bash
+curl -X POST "http://localhost:8080/ocr/text?format=plain" -F "files=@scan.pdf;type=application/pdf"
+```
+
+## German and other languages (umlauts, ß)
+
+docTR has **no language parameter for recognition**. `detect_language=true` only *reports* the detected
+language in the `/ocr/` response; it does not change what is recognized.
+
+What decides which characters can be recognized is the recognition model. All built-in models
+(`crnn_vgg16_bn`, `parseq`, `vitstr_*`, …) are trained on docTR's `french` vocabulary, which has no
+`ä ö Ä Ö ß`. German text then comes back as `Muller GmbH, UbergroBe`.
+
+docTR's maintainers publish a multilingual recognition model on the Hugging Face Hub that covers
+German and most Latin-script European languages. It is baked into the image and can be selected on
+`/ocr/text` via `reco_arch`:
+
+```bash
+curl -X POST "http://localhost:8080/ocr/text?reco_arch=Felix92/doctr-torch-parseq-multilingual-v1" \
+  -F "files=@rechnung.pdf;type=application/pdf"
+```
+
+Measured on the same test image:
+
+| Model | Result |
+| --- | --- |
+| `crnn_vgg16_bn` (default) | `Muller GmbH, UbergroBe` |
+| `Felix92/doctr-torch-parseq-multilingual-v1` | `Müller GmbH, Übergröße` |
+
+For German documents, always pass this `reco_arch`. Hub models work on `/ocr/text` only; the upstream
+routes (`/ocr/`, `/recognition/`, …) accept built-in architectures only. Which Hub models may be
+loaded is restricted by [`ALLOWED_HUB_MODELS`](configuration.md#server).
+
+## n8n
+
+**HTTP Request** node:
+
+| Field | Value |
+| --- | --- |
+| Method | `POST` |
+| URL | `http://doctr-api:8080/ocr/text` |
+| Send Query Parameters | `reco_arch` = `Felix92/doctr-torch-parseq-multilingual-v1` (for German) |
+| Send Body | on |
+| Body Content Type | `Form-Data` |
+| Parameter Type | `n8n Binary File` |
+| Name | `files` |
+| Input Data Field Name | `data` (the binary property holding the file) |
+| Options → Timeout | e.g. `120000` ms — large PDFs take a while |
+
+The result is one item; the text is in `{{ $json.text }}`.
+
+- The binary's MIME type must be `image/jpeg`, `image/png` or `application/pdf`; anything else
+  (e.g. `application/octet-stream`) is rejected with `400 Unsupported file format`.
+- Only have Base64? Put a **Convert to File** node (operation *Move Base64 String to File*, option
+  *MIME Type* set correctly, output field `data`) in front. Strip a `data:image/png;base64,` prefix
+  first, e.g. with `{{ $json.image.split(',').pop() }}`.
 
 ### Examples
 

@@ -14,6 +14,8 @@ the API template of the same release and starts the API as soon as the container
 ## What you get
 
 - The upstream API template, unchanged: `/ocr`, `/detection`, `/recognition`, `/kie`
+- `/ocr/text` — the same OCR, but only the text (JSON or plain), e.g. for n8n
+- German (ä, ö, ü, ß) and other Latin scripts via a baked-in multilingual model
 - Interactive API docs (Swagger UI) at `/docs`, OpenAPI schema at `/openapi.json`
 - `GET /health` and a Docker `HEALTHCHECK`
 - Default models (`db_resnet50`, `crnn_vgg16_bn`, orientation classifiers) baked in — the first
@@ -31,7 +33,12 @@ docker run -d --name doctr-api -p 8080:8080 ruepp/doctr-api:latest
 Open <http://localhost:8080/docs>, or send a document:
 
 ```bash
+# Full result with geometries
 curl -X POST http://localhost:8080/ocr/ -F "files=@invoice.pdf;type=application/pdf"
+
+# Only the text, German umlauts included
+curl -X POST "http://localhost:8080/ocr/text?format=plain&reco_arch=Felix92/doctr-torch-parseq-multilingual-v1" \
+  -F "files=@rechnung.pdf;type=application/pdf"
 ```
 
 With Docker Compose, use the [`docker-compose.yml`](docker-compose.yml) in this repository:
@@ -44,7 +51,7 @@ docker compose up -d
 
 | Topic | |
 | --- | --- |
-| [Usage](docs/usage.md) | Running the container, Compose, endpoints and request examples |
+| [Usage](docs/usage.md) | Running the container, Compose, endpoints, `/ocr/text`, German text, n8n |
 | [Configuration](docs/configuration.md) | Environment variables, ports, volumes, models |
 | [Versions and tags](docs/versions.md) | Which tag contains what, how releases are picked up |
 | [Building](docs/building.md) | Building the image locally, the test suite |

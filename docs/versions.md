@@ -44,7 +44,8 @@ build time (`org.opencontainers.image.created`).
 | --- | --- |
 | docTR library | `mindee/doctr` at the release tag, installed from source |
 | API (`/ocr`, `/detection`, …) | `api/app` of the same tag, unchanged |
-| Additions (`/health`, CORS, `/` redirect, entrypoint) | this repository, [`server/`](../server) |
+| Additions (`/ocr/text`, Hub models, `/health`, CORS, `/` redirect, entrypoint) | this repository, [`server/`](../server) |
+| Multilingual recognition model | [`Felix92/doctr-torch-parseq-multilingual-v1`](https://huggingface.co/Felix92/doctr-torch-parseq-multilingual-v1), current at build time |
 | PyTorch / torchvision | latest CPU wheels at build time |
 | FastAPI, uvicorn, python-multipart | latest versions at build time (see [`requirements.txt`](../requirements.txt)) |
 | Python | `python:3.12-slim` (Debian) |

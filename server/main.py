@@ -5,7 +5,8 @@ it, and adds what a long-running container needs on top:
 
 * ``GET /health`` for the Docker HEALTHCHECK and orchestrators,
 * optional CORS, configured through ``CORS_ALLOW_ORIGINS``,
-* a redirect from ``/`` to the Swagger UI.
+* a redirect from ``/`` to the Swagger UI,
+* ``POST /ocr/text``, the OCR result as plain text (see ``server/text.py``).
 """
 
 import os
@@ -15,8 +16,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
 from app.main import app
+from server import text
 
 IMAGE_VERSION = os.environ.get("DOCTR_VERSION", doctr.__version__)
+
+
+app.include_router(text.router, prefix="/ocr", tags=["ocr"])
 
 
 @app.get("/health", tags=["health"], summary="Liveness probe")

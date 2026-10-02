@@ -32,7 +32,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     VIRTUAL_ENV=/opt/venv \
     PATH=/opt/venv/bin:$PATH \
-    DOCTR_CACHE_DIR=/opt/doctr/cache
+    DOCTR_CACHE_DIR=/opt/doctr/cache \
+    HF_HOME=/opt/doctr/cache/huggingface
 
 # ---------------------------------------------------------------------------------------------------
 FROM base AS source
@@ -85,6 +86,11 @@ RUN mkdir -p "${DOCTR_CACHE_DIR}" \
 
 # ---------------------------------------------------------------------------------------------------
 FROM models AS test
+
+# A font with umlauts for the generated test images: Pillow's built-in font draws boxes for ä, ö, Ä, Ö.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY requirements-test.txt /tmp/requirements-test.txt
 RUN pip install -r /tmp/requirements-test.txt
@@ -153,6 +159,7 @@ ENV DOCTR_VERSION=${DOCTR_VERSION} \
     ROOT_PATH="" \
     FORWARDED_ALLOW_IPS="127.0.0.1" \
     CORS_ALLOW_ORIGINS="" \
+    ALLOWED_HUB_MODELS="Felix92/doctr-torch-parseq-multilingual-v1" \
     DOCTR_MULTIPROCESSING_DISABLE=FALSE
 
 WORKDIR /opt/doctr-api

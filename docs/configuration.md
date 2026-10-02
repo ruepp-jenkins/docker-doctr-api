@@ -16,6 +16,7 @@ on port `8080`.
 | `ROOT_PATH` | *(empty)* | Path prefix when running behind a reverse proxy that strips it, e.g. `/doctr`. Used for the URLs in Swagger UI and OpenAPI. |
 | `FORWARDED_ALLOW_IPS` | `127.0.0.1` | Proxies whose `X-Forwarded-*` headers are trusted. Set it to the proxy's IP, or `*` on a private network. |
 | `CORS_ALLOW_ORIGINS` | *(empty)* | Comma-separated origins allowed to call the API from a browser, e.g. `https://app.example.com,https://admin.example.com`. Empty disables CORS; `*` allows every origin. |
+| `ALLOWED_HUB_MODELS` | `Felix92/doctr-torch-parseq-multilingual-v1` | Comma-separated Hugging Face Hub repositories `/ocr/text` accepts as `reco_arch`. Hub checkpoints are pickles — only list repositories you trust. Empty disables Hub models. |
 | `DEBUG` | `False` | FastAPI debug mode (tracebacks in error responses). The upstream template defaults to *on*; the image switches it off. Only set it to `True` for debugging. |
 
 ### docTR
@@ -23,6 +24,8 @@ on port `8080`.
 | Variable | Default | Description |
 | --- | --- | --- |
 | `DOCTR_CACHE_DIR` | `/opt/doctr/cache` | Where docTR stores downloaded model weights. The baked-in default models live here. |
+| `HF_HOME` | `/opt/doctr/cache/huggingface` | Cache of models loaded from the Hugging Face Hub. Inside the cache volume on purpose. |
+| `HF_TOKEN` | *(unset)* | Optional Hugging Face token. Only raises the Hub's rate limits; the baked-in model needs none. |
 | `DOCTR_MULTIPROCESSING_DISABLE` | `FALSE` | `TRUE` disables docTR's internal multiprocessing (useful with a small `/dev/shm` or strict memory limits). |
 
 ### Informational (set by the image, do not change)
@@ -46,6 +49,8 @@ The image contains the weights the API needs for its **default** parameters:
 - detection `db_resnet50`
 - recognition `crnn_vgg16_bn`
 - page and crop orientation classifiers
+- the multilingual recognition model `Felix92/doctr-torch-parseq-multilingual-v1` (Hugging Face Hub,
+  stored under `HF_HOME`) — see [Usage → German](usage.md#german-and-other-languages-umlauts-ß)
 
 Anything else — another `det_arch`/`reco_arch`, `detect_layout`, `detect_tables`, … — is downloaded
 from Mindee's model storage on its first use and stored in `DOCTR_CACHE_DIR`. Without a volume those
